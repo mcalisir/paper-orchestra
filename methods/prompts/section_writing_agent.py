@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from utils.profile import education_profile_active
 from utils.prompt_utils import UNIVERSAL_NO_LEAKAGE_PROMPT
 
 section_writing_agent_prompt = """Role: Senior AI Researcher.
@@ -78,3 +79,6 @@ IMPORTANT NOTE:
 - DO NOT change '\\usepackage[capitalize]{{cleveref}}' into '\\usepackage[capitalize]{{cleverref}}', as there's no 'cleverref.sty'.
 - Ensure the LaTeX code compiles without errors, e.g. all the begin and end statements match correctly (e.g., \\begin{figure*} must be closed with \\end{figure*}, not \\end{figure}).
 """ + "\n" + UNIVERSAL_NO_LEAKAGE_PROMPT
+
+if education_profile_active():
+    from methods.prompts.education import section_writing_agent_prompt  # noqa: F811

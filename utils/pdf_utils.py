@@ -187,6 +187,11 @@ def compile_latex(cwd, pdf_file, texfile_name="template", timeout=30):
     execution_logs = []
 
     for command in commands:
+        # biblatex (APA 7) writes a .bcf file and needs biber instead of bibtex.
+        if command[0] == "bibtex" and os.path.exists(
+            os.path.join(cwd, f"{texfile_name}.bcf")
+        ):
+            command = ["biber", texfile_name]
         cmd_str = " ".join(command)
         try:
             result = subprocess.run(

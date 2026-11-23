@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import html
 import json
 import os
 import re
@@ -26,7 +27,13 @@ from methods.prompts.literature_review_agent import (
     literature_review_agent_writter_prompt,
 )
 from utils.gemini_utils import call_gemini_with_contents, parse_gemini_latex_results
+from utils.profile import education_profile_active
 from utils.scholar_utils import s2_title_search
+
+
+def _escape_bibtex(value) -> str:
+    """Escapes LaTeX special characters, e.g. '&' in journal names."""
+    return re.sub(r"(?<!\\)([&%#_])", r"\\\1", html.unescape(str(value)))
 
 
 class CandidatePaper(BaseModel):
@@ -54,6 +61,8 @@ class PaperData(BaseModel):
     volume: Optional[str] = None
     pages: Optional[str] = None
     publication_date: Optional[str] = None
+    doi: Optional[str] = None
+    issue: Optional[str] = None
 
 
 class WriterOutput(BaseModel):
@@ -369,6 +378,8 @@ class HybridLiteratureAgent:
                     volume=j_info.get("volume"),
                     pages=j_info.get("pages"),
                     publication_date=s2_data.get("publicationDate"),
+                    doi=s2_data.get("doi"),
+                    issue=j_info.get("issue"),
                 )
 
                 final_norm_title = self._normalize_title(full_obj.title)
@@ -429,6 +440,15 @@ class HybridLiteratureAgent:
         )
         core_problem = intro_plan.get("problem_gap_hypothesis", "N/A")
 
+        if education_profile_active():
+            targeted_source_rule = "If the hint refers to a theory, instrument, scale or analytic method, you MUST find the original journal article that introduced or validated it."
+            exploration_source_rule = "Use Google Search to find REAL journal articles from peer-reviewed education, educational psychology, language and literacy, or teacher education journals (for example, journals published by Sage, Taylor & Francis, Springer, Elsevier or Wiley)."
+            exploration_quality_rule = "Prefer SSCI/Scopus-indexed journals, recent empirical studies, systematic reviews and meta-analyses. Do not return preprints, blogs, theses or predatory journals."
+        else:
+            targeted_source_rule = 'If the hint refers to a dataset, model architecture, or baseline (e.g., "research paper introducing..."), you MUST find the primary, original paper that introduced it.'
+            exploration_source_rule = "Use Google Search to find REAL papers (ArXiv, CVPR, NeurIPS, ICML, ICLR, etc.)."
+            exploration_quality_rule = "Only return papers published in top-tier conferences or journals, or highly-cited works, or the exact state-of-the-art relevant to the task."
+
         if task.get("search_type") == "targeted":
             prompt = f"""
             Identify the SPECIFIC academic paper described by this hint: "{task['focus']}".
@@ -438,7 +458,7 @@ class HybridLiteratureAgent:
             
             INSTRUCTIONS:
             1. Use Google Search to find the EXACT title and year of this paper.
-            2. If the hint refers to a dataset, model architecture, or baseline (e.g., "research paper introducing..."), you MUST find the primary, original paper that introduced it.
+            2. {targeted_source_rule}
             3. Return EXACTLY 1 candidate paper that matches best.
 
             YOU MUST return the results in json format (```json content```) following this schema:
@@ -454,8 +474,8 @@ class HybridLiteratureAgent:
             CUTOFF DATE: Published BEFORE {cutoff_date}
             
             INSTRUCTIONS:
-            1. Use Google Search to find REAL papers (ArXiv, CVPR, NeurIPS, ICML, ICLR, etc.).
-            2. Only return papers published in top-tier conferences or journals, or highly-cited works, or the exact state-of-the-art relevant to the task.
+            1. {exploration_source_rule}
+            2. {exploration_quality_rule}
 
             YOU MUST return the results in json format (```json content```) following this schema:
             {DiscoveryResult.model_json_schema()}
@@ -550,19 +570,27 @@ class HybridLiteratureAgent:
             p.citation_key = unique_key
             seen_keys.add(unique_key)
 
-            author_str = " and ".join(p.authors) if p.authors else "Unknown"
+            author_str = (
+                " and ".join(_escape_bibtex(a) for a in p.authors)
+                if p.authors
+                else "Unknown"
+            )
             entry_type = "article" if p.journal else "inproceedings"
 
-            entry = f"@{entry_type}{{{p.citation_key},\n  title={{{p.title}}},\n  author={{{author_str}}},\n"
+            entry = f"@{entry_type}{{{p.citation_key},\n  title={{{_escape_bibtex(p.title)}}},\n  author={{{author_str}}},\n"
             if p.journal:
-                entry += f"  journal={{{p.journal}}},\n"
+                entry += f"  journal={{{_escape_bibtex(p.journal)}}},\n"
             else:
-                entry += f"  booktitle={{{p.venue}}},\n"
+                entry += f"  booktitle={{{_escape_bibtex(p.venue)}}},\n"
             entry += f"  year={{{p.year}}}"
             if p.volume:
-                entry += f",\n  volume={{{p.volume}}}"
+                entry += f",\n  volume={{{_escape_bibtex(p.volume)}}}"
+            if p.issue:
+                entry += f",\n  number={{{_escape_bibtex(p.issue)}}}"
             if p.pages:
-                entry += f",\n  pages={{{p.pages}}}"
+                entry += f",\n  pages={{{_escape_bibtex(p.pages)}}}"
+            if p.doi:
+                entry += f",\n  doi={{{p.doi}}}"
             entry += "\n}"
             entries.append(entry)
         return "\n\n".join(entries)

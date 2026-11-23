@@ -26,6 +26,8 @@ import threading
 
 import dotenv
 
+from utils import cli_backend
+
 dot_file = os.path.join(os.path.dirname(__file__), "../.env")
 dotenv.load_dotenv(dot_file)
 
@@ -171,14 +173,18 @@ def call_gemini_with_contents(
     raw_response = None
     parsed_response = None
 
-    genai_client = get_genai_client()
+    use_cli = cli_backend.active_backend() is not None
+    genai_client = None if use_cli else get_genai_client()
     for attempt in range(max_retries):
         try:
-            response = genai_client.models.generate_content(
-                model=model_name,
-                contents=contents,
-                config=types.GenerateContentConfig(**generation_configs),
-            )
+            if use_cli:
+                response = cli_backend.gemini_response(contents, generation_configs)
+            else:
+                response = genai_client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(**generation_configs),
+                )
 
             if not response or not hasattr(response, "text") or response.text is None:
                 raise ValueError("Incomplete response from Gemini API or empty text")
@@ -201,6 +207,10 @@ def call_gemini_with_contents(
             print(
                 f"Warning: Gemini API call failed on attempt {attempt + 1} of {max_retries}. Error: {error_msg}",
             )
+
+            if "safeguards flagged" in error_msg.lower():
+                print("The model's safety filter declined this request. Not retrying.")
+                raise e
 
             if (
                 "maximum number of tokens allowed" in error_msg.lower()
@@ -291,6 +301,10 @@ def generate_image_with_gemini(
     """
     if generation_configs is None:
         generation_configs = {}
+
+    if cli_backend.active_backend():
+        print("Warning: image generation is not available through the CLI backend.")
+        return None
 
     genai_client = get_genai_client()
     for attempt in range(max_retries):

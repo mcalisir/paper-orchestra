@@ -25,6 +25,8 @@ import base64
 from openai import OpenAI  # type: ignore
 from dotenv import load_dotenv  # type: ignore
 
+from utils import cli_backend
+
 dot_file = os.path.join(os.path.dirname(__file__), "../.env")
 load_dotenv(dot_file)
 
@@ -121,7 +123,8 @@ def call_openai_models_with_content(
 ):
     raw_response = None
     parsed_response = None
-    openai_client = get_openai_client()
+    use_cli = cli_backend.active_backend() is not None
+    openai_client = None if use_cli else get_openai_client()
 
     for attempt in range(max_retries):
         try:
@@ -132,11 +135,14 @@ def call_openai_models_with_content(
 
             messages.append({"role": "user", "content": content})
 
-            response = openai_client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                **generation_configs,
-            )
+            if use_cli:
+                response = cli_backend.openai_response(messages)
+            else:
+                response = openai_client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    **generation_configs,
+                )
             raw_response = response.choices[0].message.content
             parsed_response = result_parsing_func(raw_response)
 

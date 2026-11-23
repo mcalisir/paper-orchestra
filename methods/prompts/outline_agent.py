@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from utils.profile import education_profile_active
 from utils.prompt_utils import UNIVERSAL_NO_LEAKAGE_PROMPT
 
 outline_agent_system_prompt = (
@@ -197,3 +198,6 @@ Example Output:
     + "\n"
     + UNIVERSAL_NO_LEAKAGE_PROMPT
 )
+
+if education_profile_active():
+    from methods.prompts.education import outline_agent_system_prompt  # noqa: F811

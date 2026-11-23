@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from utils.profile import education_profile_active
 from utils.prompt_utils import UNIVERSAL_NO_LEAKAGE_PROMPT
 
 literature_review_agent_writter_prompt = """Role: Senior AI Researcher.
@@ -45,3 +46,8 @@ IMPORTANT NOTE:
 OUTPUT Format:
 You must return the code for the updated 'template.tex', Make sure to wrap the code with ```latex content```.
 """ + "\n" + UNIVERSAL_NO_LEAKAGE_PROMPT
+
+if education_profile_active():
+    from methods.prompts.education import (  # noqa: F811
+        literature_review_agent_writter_prompt,
+    )

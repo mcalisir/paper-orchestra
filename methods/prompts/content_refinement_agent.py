@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from utils.profile import education_profile_active
 from utils.prompt_utils import UNIVERSAL_NO_LEAKAGE_PROMPT
 
 content_refinement_agent_system_prompt = """Role: Senior AI Researcher.
@@ -83,3 +84,8 @@ You MUST return your response in two distinct code blocks in this exact order:
 - Responsiveness: Every question in the reviewer_feedback must be addressed by improving the presentation, EXCEPT for questions asking for new experiments or data not in `experimental_log.md` (which should be ignored). Never explicitly state a limitation.
 - Safety: Do not remove the \\documentclass or essential preamble.
 """ + "\n" + UNIVERSAL_NO_LEAKAGE_PROMPT
+
+if education_profile_active():
+    from methods.prompts.education import (  # noqa: F811
+        content_refinement_agent_system_prompt,
+    )

@@ -26,6 +26,7 @@ from utils.gemini_utils import (
 )
 
 from autoraters.agent_review import perform_review_agentreview
+from utils.profile import education_profile_active
 
 from methods.prompts.content_refinement_agent import (
     content_refinement_agent_system_prompt,
@@ -87,9 +88,16 @@ class ContentRefinementAgent:
         try:
             paper_text = load_paper(pdf_path=pdf_path)
 
+            review_options = {}
+            if education_profile_active():
+                from methods.prompts.education import education_review_options
+
+                review_options = education_review_options()
+
             review = perform_review_agentreview(
                 text=paper_text,
                 model_name=self.model_name,
+                **review_options,
             )
 
             score = review.get("Overall", 0)
@@ -245,8 +253,13 @@ Respond in JSON format with the following structure:
 
         final_valid_pdf_path = initial_pdf_path
 
+        reflections = self.max_reflections
+        if "Error" in current_peer_review:
+            reflections = 0
+            print(" >> WARNING: Peer review failed. Refinement skipped; this draft was NOT reviewed.")
+
         # --- Content Refinement Loop ---
-        for i in range(self.max_reflections):
+        for i in range(reflections):
             print(f"\n=== Refinement Iteration {i+1}/{self.max_reflections} ===")
 
             cur_filename = f"refined_paper_v{i+1}"
@@ -332,6 +345,9 @@ INSTRUCTION:
                 pdf_to_grid_images(cur_pdf_path, screenshots_dir)
 
                 new_review, new_score = self._get_peer_review(cur_pdf_path, f"v{i+1}")
+                if "Error" in new_review:
+                    print(" >> WARNING: Peer review failed. Keeping the last reviewed version.")
+                    break
 
                 # --- COMPARISON LOGIC & METRICS EXTRACTION ---
                 old_metrics = self._extract_scores(current_peer_review)
